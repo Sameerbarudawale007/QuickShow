@@ -4,12 +4,12 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import BlurCircle from "./BlurCircle";
 import MovieCard from "./MovieCard";
-import { dummyShowsData } from "../assets/assets";
+import { useAppContext } from "../context/AppContext";
 
 const Feature = () => {
   const navigate = useNavigate();
+  const { shows } = useAppContext();
 
-  /* Staggered fade‑up animation for each movie card */
   const container = {
     hidden: {},
     show: {
@@ -50,14 +50,13 @@ const Feature = () => {
         viewport={{ once: true, amount: 0.2 }}
         className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"
       >
-        {dummyShowsData.slice(0, 4).map((movie) => (
-          <motion.div key={movie._id} variants={item}>
-            <MovieCard movie={movie} />
+        {shows.slice(0, 4).map((show) => (
+          <motion.div key={show._id} variants={item}>
+            <MovieCard movie={show.movie} />
           </motion.div>
         ))}
       </motion.div>
 
-      {/* CTA */}
       <div className="mt-20 flex justify-center">
         <motion.button
           whileHover={{ scale: 1.05 }}

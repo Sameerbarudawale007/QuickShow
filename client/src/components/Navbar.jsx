@@ -4,6 +4,7 @@ import { assets } from "../assets/assets";
 import { MenuIcon, SearchIcon, XIcon } from "lucide-react";
 import { motion } from "framer-motion";
 import { useClerk, UserButton, useUser } from "@clerk/clerk-react";
+import { useAppContext } from "../context/AppContext";
 
 const navLinks = [
   { label: "Home", path: "/" },
@@ -18,6 +19,8 @@ const Navbar = () => {
   const { pathname } = useLocation();
   const { user } = useUser();
   const { openSignIn } = useClerk();
+
+  const { favoriteMovies } = useAppContext();
 
   /** underline animation */
   const Underline = ({ active }) => (
@@ -46,6 +49,9 @@ const Navbar = () => {
         {/* Desktop nav */}
         <ul className="hidden md:flex gap-10 relative">
           {navLinks.map(({ label, path }) => {
+            if (label === "Favorite" && favoriteMovies.length === 0)
+              return null;
+
             const active = pathname === path;
             return (
               <li key={path} className="relative">

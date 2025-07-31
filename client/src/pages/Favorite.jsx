@@ -1,8 +1,8 @@
 import React from 'react';
-import { dummyShowsData } from '../assets/assets';
 import MovieCard from '../components/MovieCard';
 import BlurCircle from '../components/BlurCircle';
 import { motion } from 'framer-motion';
+import { useAppContext } from '../context/AppContext';
 
 // ✨ Animation variants
 const container = {
@@ -19,11 +19,14 @@ const item = {
 };
 
 const Favorite = () => {
+
+  const { favoriteMovies } = useAppContext();
+
   // ───── Empty‑state ─────
-  if (!dummyShowsData?.length)
+  if (!favoriteMovies?.length)
     return (
       <section className="flex items-center justify-center min-h-[80vh] px-6 md:px-16 lg:px-40 xl:px-44">
-        <h1 className="text-lg font-medium">No movies found</h1>
+        <h1 className="text-5xl font-medium">No movies found</h1>
       </section>
     );
 
@@ -51,7 +54,7 @@ const Favorite = () => {
         animate="show"
         className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"
       >
-        {dummyShowsData.map((movie, i) => (
+        {favoriteMovies.map((movie, i) => (
           <motion.div key={i} variants={item}>
             <MovieCard movie={movie} />
           </motion.div>

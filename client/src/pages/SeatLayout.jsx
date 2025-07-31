@@ -1,145 +1,235 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowRightIcon, ClockIcon } from "lucide-react";
-import { dummyShowsData, dummyDateTimeData, assets } from "../assets/assets";
 import isoTimeFormat from "../lib/isoTimeFormat";
 import BlurCircle from "../components/BlurCircle";
 import toast from "react-hot-toast";
-import { motion } from "framer-motion";
-
-const SEAT_LIMIT = 5;
-const ROW_GROUPS = [
-  ["A", "B"],
-  ["C", "D"],
-  ["E", "F"],
-  ["G", "H"],
-  ["I", "J"],
-];
+import { useAppContext } from "../context/AppContext";
+import { assets } from "../assets/assets";
 
 const SeatLayout = () => {
+  const groupRows = [
+    ["A", "B"],
+    ["C", "D"],
+    ["E", "F"],
+    ["G", "H"],
+    ["I", "J"],
+  ];
+
   const { id, date } = useParams();
   const [selectedSeats, setSelectedSeats] = useState([]);
   const [selectedTime, setSelectedTime] = useState(null);
   const [show, setShow] = useState(null);
   const navigate = useNavigate();
+  const { axios, getToken, user } = useAppContext();
+  const [occupiedSeats, setOccupiedSeats] = useState([]);
+
+  const sanitizeDate = (dateStr) => {
+    if (!dateStr) return null;
+    const decoded = decodeURIComponent(dateStr).replace(" GM", " GMT");
+    const parsed = new Date(decoded);
+    return isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const parsedDate = sanitizeDate(date);
 
   useEffect(() => {
-    const match = dummyShowsData.find((m) => m.id === parseInt(id));
-    if (match) setShow({ movie: match, dateTime: dummyDateTimeData });
+    const getShow = async () => {
+      try {
+        const { data } = await axios.get(`/api/show/${id}`);
+        if (data.success) {
+          setShow(data);
+        }
+      } catch (error) {
+        console.error("Error fetching show:", error);
+      }
+    };
+    getShow();
   }, [id]);
+
+  const getOccupiedSeats = async () => {
+    try {
+      const { data } = await axios.get(
+        `/api/booking/seats/${selectedTime.showId}`
+      );
+      if (data.success) {
+        setOccupiedSeats(data.occupiedSeats);
+      } else {
+        toast.error(data.message || "Failed to fetch occupied seats");
+      }
+    } catch (error) {
+      console.error("Error fetching occupied seats:", error);
+    }
+  };
 
   const handleSeatClick = (seatId) => {
     if (!selectedTime) return toast("Please select time first");
-    if (!selectedSeats.includes(seatId) && selectedSeats.length >= SEAT_LIMIT)
-      return toast(`You can only select ${SEAT_LIMIT} seats`);
+    if (!selectedSeats.includes(seatId) && selectedSeats.length >= 5)
+      return toast("You can only select up to 5 seats");
+    if (occupiedSeats.includes(seatId))
+      return toast("This seat is already taken");
 
     setSelectedSeats((prev) =>
       prev.includes(seatId)
-        ? prev.filter((s) => s !== seatId)
+        ? prev.filter((seat) => seat !== seatId)
         : [...prev, seatId]
     );
   };
 
+  // const bookTickets = async () => {
+  //   try {
+  //     if (!user) return toast.error("Please login to book tickets");
+  //     if (!selectedTime || selectedSeats.length === 0) {
+  //       return toast.error("Please select time and seats to book");
+  //     }
+
+  //     const { data } = await axios.post(
+  //       "/api/booking/create",
+  //       { user: user._id, showId: selectedTime.showId, selectedSeats },
+  //       {
+  //         headers: { Authorization: `Bearer ${getToken()}` },
+  //       }
+  //     );
+  //     if (data.success) {
+  //       toast.success("Tickets booked successfully");
+  //       navigate("/my-bookings");
+  //     } else {
+  //       toast.error(data.message || "Failed to book tickets");
+  //     }
+  //   } catch (error) {
+  //     console.error("Error booking tickets:", error);
+  //     toast.error("Failed to book tickets");
+  //   }
+  // };
+
+const bookTickets = async () => {
+  try {
+    if (!user) return toast.error("Please login to book tickets");
+    if (!selectedTime || selectedSeats.length === 0) {
+      return toast.error("Please select time and seats to book");
+    }
+
+    const token = await getToken(); // important!
+
+    const { data } = await axios.post(
+      "/api/booking/create",
+      { user: user._id, showId: selectedTime.showId, selectedSeats },
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+
+    if (data.success) {
+      toast.success("Tickets booked successfully");
+      navigate("/my-bookings");
+    } else {
+      toast.error(data.message || "Failed to book tickets");
+    }
+  } catch (error) {
+    console.error("Error booking tickets:", error);
+    toast.error("Failed to book tickets");
+  }
+};
+
+
+
+
   const renderSeats = (row, count = 9) => (
-    <div key={row} className="flex gap-2 mt-2 flex-wrap justify-center">
-      {Array.from({ length: count }, (_, i) => {
-        const seatId = `${row}${i + 1}`;
-        const active = selectedSeats.includes(seatId);
-        return (
-          <motion.button
-            key={seatId}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={() => handleSeatClick(seatId)}
-            className={`h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 rounded border border-primary/60 text-xs font-medium
-              ${active ? "bg-primary text-white" : "hover:bg-primary/20"}`}
-          >
-            {seatId}
-          </motion.button>
-        );
-      })}
+    <div key={row} className="flex gap-2 mt-2">
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        {Array.from({ length: count }, (_, i) => {
+          const seatId = `${row}${i + 1}`;
+          return (
+            <button
+              key={seatId}
+              onClick={() => handleSeatClick(seatId)}
+              className={`h-8 w-8 rounded border border-primary/60 cursor-pointer ${
+                selectedSeats.includes(seatId) && "bg-primary text-white"
+              } ${occupiedSeats.includes(seatId) && "opacity-50"}`}
+            >
+              {seatId}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 
-  if (!show)
-    return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="flex items-center justify-center h-[60vh] text-white"
-      >
-        Loading seats…
-      </motion.div>
-    );
+  useEffect(() => {
+    if (selectedTime) {
+      getOccupiedSeats();
+    }
+  }, [selectedTime]);
 
-  const timings = show.dateTime[date] || [];
-
-  return (
-    <div className="px-4 sm:px-8 md:px-16 lg:px-40 pt-24 pb-10 flex flex-col md:flex-row gap-10">
-      <motion.aside
-        initial={{ x: -40, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 120, damping: 16 }}
-        className="md:w-60 w-full bg-gradient-to-br from-[#2a0912]/80 to-[#110a0f]/80 border border-white/10 backdrop-blur rounded-xl p-6 shadow-lg sticky md:top-28 h-max"
-      >
-        <h2 className="text-lg font-semibold mb-4 text-white">Available Timings</h2>
-        <div className="space-y-2">
-          {timings.map((t) => {
-            const active = selectedTime === t.time;
+  return show ? (
+    <div className="flex flex-col md:flex-row md:px-16 lg:px-40 px-6 py-30">
+      {/* Time Selection Panel */}
+      <div className="w-60 bg-primary/10 border border-primary/20 rounded-lg py-10 h-max md:sticky md:top-30">
+        <p className="text-lg font-semibold px-6">Available Timing</p>
+        <div className="mt-5 space-y-1 px-4">
+          {(show.dateTime?.[date] || []).map((timeObj, index) => {
+            const parsedDate = new Date(
+              timeObj.time.replace(" GM", " GMT")
+            );
             return (
-              <button
-                key={t.time}
-                onClick={() => setSelectedTime(t.time)}
-                className={`flex items-center gap-2 w-full px-5 py-2 rounded-md transition-colors
-                  ${active ? "bg-[#ff3c78] text-white" : "hover:bg-white/10"}`}
+              <div
+                key={index}
+                onClick={() => setSelectedTime(timeObj)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-md cursor-pointer transition-colors ${
+                  selectedTime?.time === timeObj.time
+                    ? "bg-primary text-white"
+                    : "hover:bg-primary/20 text-white/80"
+                }`}
               >
                 <ClockIcon className="w-4 h-4" />
-                <span className="text-sm tracking-wide">{isoTimeFormat(t.time)}</span>
-              </button>
+                <p className="text-sm font-medium">
+                  {parsedDate.toLocaleTimeString("en-US", {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </p>
+              </div>
             );
           })}
         </div>
-      </motion.aside>
+      </div>
 
-      <motion.main
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="flex-1 flex flex-col items-center"
-      >
+      {/* Seat Selection */}
+      <div className="relative flex-1 flex flex-col items-center max-md:mt-16">
         <BlurCircle top="-100px" left="-100px" />
-        <BlurCircle bottom="0" right="0" />
-
-        <h1 className="text-2xl font-semibold mb-4 text-white">Select Your Seat</h1>
-        <img src={assets.screenImage} alt="screen" className="max-w-xs" />
-        <p className="text-gray-400 text-sm mb-10">SCREEN SIDE</p>
-
-        <div className="text-gray-300 text-[11px] flex flex-col items-center w-full">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-12 mb-8 w-full">
-            {ROW_GROUPS[0].map((row) => renderSeats(row))}
+        <BlurCircle bottom="0px" right="0px" />
+        <h1 className="text-2xl font-semibold mb-4">Select Your Seat</h1>
+        {selectedTime && (
+          <p className="text-md text-gray-200 mb-4">
+            Selected Time:{" "}
+            <span className="text-white font-medium">
+              {isoTimeFormat(selectedTime.time)}
+            </span>
+          </p>
+        )}
+        <img src={assets.screenImage} alt="screen" />
+        <p className="text-gray-400 text-sm mb-6">SCREEN SIDE</p>
+        <div className="flex flex-col items-center mt-10 text-xs text-gray-300">
+          <div className="grid grid-cols-2 md:grid-cols-1 gap-8 md:gap-2 mb-6">
+            {groupRows[0].map((row) => renderSeats(row))}
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 sm:gap-12 w-full">
-            {ROW_GROUPS.slice(1).map((pair) => (
-              <div key={pair[0]} className="space-y-2">
-                {pair.map((row) => renderSeats(row))}
-              </div>
+          <div className="grid grid-cols-2 gap-11">
+            {groupRows.slice(1).map((group, idx) => (
+              <div key={idx}>{group.map((row) => renderSeats(row))}</div>
             ))}
           </div>
         </div>
-
-        {selectedSeats.length > 0 && selectedTime && (
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => navigate("/my-bookings")}
-            className="flex items-center cursor-pointer gap-2 mt-10 bg-primary text-white py-2 px-6 rounded-full shadow-lg"
-          >
-            Proceed to Checkout
-            <ArrowRightIcon strokeWidth={3} className="w-4 h-4" />
-          </motion.button>
-        )}
-      </motion.main>
+        <button
+          onClick={bookTickets}
+          className="flex items-center gap-2 mt-6 bg-primary text-white py-2 px-4 rounded-md cursor-pointer"
+        >
+          Proceed to Checkout
+          <ArrowRightIcon strokeWidth={3} className="w-4 h-4" />
+        </button>
+      </div>
     </div>
+  ) : (
+    <div>Loading...</div>
   );
 };
 
